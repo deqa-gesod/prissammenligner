@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* Grunnpalett — soft minimalistisk feminint */
+  --color-cream: #F5EDDD;
+  --color-blush-50: #FBF5EE;
+  --color-rose-dusty: #D9A5A5;
+  --color-rose-mist: #F0DFD2;
+  --color-ink: #2D2623;
+  --color-mocha: #8B7B6F;
+
+  /* Funksjonelle farger — støvete, ikke neon */
+  --color-mint-soft: #A8C9A3;
+  --color-peach-soft: #F4B892;
+  --color-lavender-soft: #C9B8DD;
+  --color-sky-soft: #B8D5E2;
+
+  /* Fonter */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-cormorant);
+}
+
+body {
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans), sans-serif;
+}
