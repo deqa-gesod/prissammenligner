@@ -30,7 +30,7 @@ def normalize_name(raw: str) -> str:
       1. Lowercase og konverter komma→punktum i tall ("1,75" → "1.75").
       2. Fjern %-tegn (tallet er nok: "0.5" fra "0.5%").
       3. Slå sammen tall + enhet uten mellomrom ("1 l" → "1l").
-      4. Konverter ml og små g til liter/kg for sammenlignbarhet.
+      4. Konverter ml og små g til liter/kg så vi kan samenligne på tvers.
       5. Fjern overflødige desimaler: "1.0" → "1".
       6. Fjern merkenavn og stopwords.
       7. Bytt ut alt annet enn bokstaver/tall/mellomrom med mellomrom.

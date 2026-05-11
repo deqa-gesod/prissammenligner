@@ -1,52 +1,57 @@
 import Link from "next/link"
 import sql from "./lib/db"
 import { categories } from "./lib/categories"
-import { stores } from "./lib/stores"
 
 export const revalidate = 0
 
-export default async function Home() {
-  const [deals, countRows] = await Promise.all([
-    sql`
-      SELECT * FROM (
-        SELECT DISTINCT ON (l.product_id)
-          l.product_id AS id,
-          l.name_raw,
-          l.size::float AS size,
-          l.unit,
-          s.slug AS store_slug,
-          s.name AS store_name,
-          ps.price::float AS price,
-          ps.campaign_price::float AS campaign_price,
-          ps.campaign_text,
-          ROUND((1 - ps.campaign_price / ps.price) * 100)::int AS pct
-        FROM listing l
-        JOIN store s ON s.id = l.store_id
-        JOIN product p ON p.id = l.product_id
-        CROSS JOIN LATERAL (
-          SELECT price, campaign_price, campaign_text
-          FROM price_snapshot
-          WHERE listing_id = l.id
-          ORDER BY scraped_at DESC
-          LIMIT 1
-        ) ps
-        WHERE p.category = 'meieri'
-          AND ps.campaign_price IS NOT NULL
-          AND ps.price > 0
-          AND ps.campaign_price < ps.price
-        ORDER BY l.product_id, ps.campaign_price / ps.price ASC
-      ) per_product
-      ORDER BY pct DESC
-      LIMIT 4
-    `,
-    sql`
-      SELECT category, COUNT(*)::int AS n
-      FROM product
-      WHERE category IS NOT NULL
-      GROUP BY category
-    `,
-  ])
+const MEIERI_KATEGORIER = ["melk", "syrnet", "sjokolademelk", "proteindrikker"]
 
+export default async function Home() {
+  // Hent alle aktive listings med siste pris og kampanje, for meieri-kategoriene.
+  // Bruker subquery for å finne siste snapshot per listing.
+  const dealRows = await sql`
+    SELECT
+      l.product_id AS id,
+      l.name_raw,
+      l.size::float AS size,
+      l.unit,
+      s.slug AS store_slug,
+      s.name AS store_name,
+      ps.price::float AS price,
+      ps.campaign_price::float AS campaign_price,
+      ps.campaign_text
+    FROM listing l
+    JOIN product p ON p.id = l.product_id
+    JOIN store s ON s.id = l.store_id
+    JOIN price_snapshot ps ON ps.listing_id = l.id
+    WHERE p.category = ANY(${MEIERI_KATEGORIER})
+      AND ps.scraped_at = (
+        SELECT MAX(scraped_at) FROM price_snapshot WHERE listing_id = l.id
+      )
+      AND ps.campaign_price IS NOT NULL
+      AND ps.price > 0
+      AND ps.campaign_price < ps.price
+  `
+
+  // Velg den beste tilbudet per produkt (kun ett oppslag per produkt på forsiden)
+  const bestPerProduct = new Map()
+  for (const r of dealRows) {
+    const pct = Math.round((1 - r.campaign_price / r.price) * 100)
+    const existing = bestPerProduct.get(r.id)
+    if (!existing || pct > existing.pct) {
+      bestPerProduct.set(r.id, { ...r, pct })
+    }
+  }
+  const deals = [...bestPerProduct.values()]
+    .sort((a, b) => b.pct - a.pct)
+    .slice(0, 4)
+
+  const countRows = await sql`
+    SELECT category, COUNT(*)::int AS n
+    FROM product
+    WHERE category IS NOT NULL
+    GROUP BY category
+  `
   const counts = Object.fromEntries(countRows.map(r => [r.category, r.n]))
 
   return (
@@ -102,9 +107,9 @@ function WeeklyDeals({ deals }) {
         </div>
         <Link
           href="/tilbud"
-          className="hidden sm:inline-flex items-center gap-1 text-sm text-mocha hover:text-rose-dusty transition-colors"
+          className="hidden sm:inline-flex items-center gap-2 text-base text-ink hover:text-rose-dusty hover:underline transition-colors"
         >
-          Se alle tilbud <span className="italic font-serif">→</span>
+          Se alle tilbud <span className="italic font-serif text-lg">→</span>
         </Link>
       </div>
 
@@ -120,7 +125,7 @@ function WeeklyDeals({ deals }) {
 
       <Link
         href="/tilbud"
-        className="sm:hidden mt-6 block text-center text-sm text-mocha hover:text-rose-dusty"
+        className="sm:hidden mt-6 block text-center text-base text-ink hover:text-rose-dusty hover:underline"
       >
         Se alle tilbud →
       </Link>
@@ -183,44 +188,25 @@ function CategoryGrid({ counts }) {
         </h2>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
         {categories.map(c => {
           const n = counts[c.slug] ?? 0
-          if (!c.enabled) {
-            return (
-              <div
-                key={c.slug}
-                className="rounded-xl border border-rose-mist bg-blush-50/50 p-6 sm:p-8 flex items-center gap-4 opacity-50 cursor-not-allowed"
-                style={{ boxShadow: "0 1px 3px rgba(217,165,165,0.12)" }}
-                title="Kommer snart"
-              >
-                <span className="text-4xl sm:text-5xl grayscale" aria-hidden>{c.emoji}</span>
-                <div>
-                  <h3 className="font-serif italic text-xl sm:text-2xl text-mocha">
-                    {c.name}
-                  </h3>
-                  <p className="text-sm text-mocha italic font-serif">kommer snart</p>
-                </div>
-              </div>
-            )
-          }
           return (
             <Link
               key={c.slug}
               href={`/kategori/${c.slug}`}
-              className="group rounded-xl border border-rose-mist bg-blush-50 p-6 sm:p-8 flex items-center gap-4 hover:border-rose-dusty hover:bg-blush-50/70 transition-all"
+              className="group rounded-xl border border-rose-mist bg-blush-50 p-6 flex flex-col gap-3 hover:border-rose-dusty hover:bg-blush-50/70 transition-all"
               style={{ boxShadow: "0 1px 3px rgba(217,165,165,0.12)" }}
             >
               <span className="text-4xl sm:text-5xl" aria-hidden>{c.emoji}</span>
               <div>
-                <h3 className="font-serif italic text-xl sm:text-2xl text-ink">
+                <h3 className="font-serif italic text-xl sm:text-2xl text-ink leading-tight">
                   {c.name}
                 </h3>
-                <p className="text-sm text-mocha tabular-nums">
+                <p className="text-sm text-mocha tabular-nums mt-1">
                   {n} {n === 1 ? "produkt" : "produkter"}
                 </p>
               </div>
-              <span className="ml-auto text-mocha group-hover:text-rose-dusty transition-colors">→</span>
             </Link>
           )
         })}

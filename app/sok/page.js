@@ -1,5 +1,6 @@
 import Link from "next/link"
 import sql from "../lib/db"
+import { groupByProduct } from "../lib/queries"
 import { categories } from "../lib/categories"
 import { stores } from "../lib/stores"
 import {
@@ -29,49 +30,48 @@ export default async function SokPage({ searchParams }) {
   let results = []
   if (q) {
     const pattern = `%${q}%`
-    results = await sql`
-      SELECT
-        p.id,
-        p.name_norm,
-        p.category,
-        json_agg(
-          json_build_object(
-            'store_slug', s.slug,
-            'name_raw', r.name_raw,
-            'price', r.price::float,
-            'price_per_unit', r.price_per_unit::float,
-            'campaign_price', r.campaign_price::float,
-            'campaign_text', r.campaign_text,
-            'url', r.url,
-            'unit', r.unit,
-            'size', r.size::float
-          ) ORDER BY s.slug
-        ) AS listings
+
+    // Finn produkt-IDene som matcher søkeordet (på normalisert navn eller på listing-navn)
+    const matchedIds = await sql`
+      SELECT DISTINCT p.id
       FROM product p
-      JOIN (
-        SELECT DISTINCT ON (l.product_id, l.store_id)
-          l.product_id, l.store_id, l.name_raw, l.url, l.unit, l.size,
-          ps.price, ps.price_per_unit, ps.campaign_price, ps.campaign_text
-        FROM listing l
-        CROSS JOIN LATERAL (
-          SELECT price, price_per_unit, campaign_price, campaign_text
-          FROM price_snapshot
-          WHERE listing_id = l.id
-          ORDER BY scraped_at DESC
-          LIMIT 1
-        ) ps
-        ORDER BY l.product_id, l.store_id, l.last_seen_at DESC NULLS LAST, l.id
-      ) r ON r.product_id = p.id
-      JOIN store s ON s.id = r.store_id
+      LEFT JOIN listing l ON l.product_id = p.id
       WHERE p.name_norm ILIKE ${pattern}
-         OR EXISTS (
-           SELECT 1 FROM listing l2
-           WHERE l2.product_id = p.id AND l2.name_raw ILIKE ${pattern}
-         )
-      GROUP BY p.id, p.name_norm, p.category
-      ORDER BY p.name_norm
+         OR l.name_raw ILIKE ${pattern}
+      ORDER BY p.id
       LIMIT 100
     `
+    const ids = matchedIds.map(r => r.id)
+
+    if (ids.length > 0) {
+      const rows = await sql`
+        SELECT
+          p.id AS product_id,
+          p.name_norm,
+          p.category,
+          l.name_raw,
+          l.size::float AS size,
+          l.unit,
+          l.url,
+          s.slug AS store_slug,
+          s.name AS store_name,
+          ps.price::float AS price,
+          ps.price_per_unit::float AS price_per_unit,
+          ps.campaign_price::float AS campaign_price,
+          ps.campaign_text
+        FROM listing l
+        JOIN product p ON p.id = l.product_id
+        JOIN store s ON s.id = l.store_id
+        JOIN price_snapshot ps ON ps.listing_id = l.id
+        WHERE p.id = ANY(${ids})
+          AND ps.scraped_at = (
+            SELECT MAX(scraped_at) FROM price_snapshot WHERE listing_id = l.id
+          )
+      `
+      results = groupByProduct(rows).sort((a, b) =>
+        a.name_norm.localeCompare(b.name_norm)
+      )
+    }
   }
 
   const hasQuery = q.length > 0
@@ -275,34 +275,20 @@ function Suggestions() {
       <h2 className="font-serif italic text-xl text-ink mb-6 text-center">
         Kategoriene
       </h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {categories.map(c =>
-          c.enabled ? (
-            <Link
-              key={c.slug}
-              href={`/kategori/${c.slug}`}
-              className="rounded-xl border border-rose-mist bg-blush-50 p-4 flex items-center gap-3 hover:border-rose-dusty transition-colors"
-            >
-              <span className="text-2xl" aria-hidden>{c.emoji}</span>
-              <div>
-                <div className="font-medium text-ink text-sm">{c.name}</div>
-                <div className="text-xs text-mocha italic font-serif">utforsk</div>
-              </div>
-            </Link>
-          ) : (
-            <div
-              key={c.slug}
-              className="rounded-xl border border-rose-mist bg-blush-50/50 p-4 flex items-center gap-3 opacity-50 cursor-not-allowed"
-              title="Kommer snart"
-            >
-              <span className="text-2xl grayscale" aria-hidden>{c.emoji}</span>
-              <div>
-                <div className="font-medium text-mocha text-sm">{c.name}</div>
-                <div className="text-xs text-mocha italic font-serif">snart</div>
-              </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {categories.map(c => (
+          <Link
+            key={c.slug}
+            href={`/kategori/${c.slug}`}
+            className="rounded-xl border border-rose-mist bg-blush-50 p-4 flex items-center gap-3 hover:border-rose-dusty transition-colors"
+          >
+            <span className="text-2xl" aria-hidden>{c.emoji}</span>
+            <div>
+              <div className="font-medium text-ink text-sm">{c.name}</div>
+              <div className="text-xs text-mocha italic font-serif">utforsk</div>
             </div>
-          )
-        )}
+          </Link>
+        ))}
       </div>
     </section>
   )

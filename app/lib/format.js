@@ -50,6 +50,32 @@ export function cheapestListing(product) {
   return min
 }
 
+export function unitPrice(listing) {
+  const eff = effectivePrice(listing)
+  if (listing.price_per_unit != null) {
+    // price_per_unit i DB er basert på vanlig pris, så juster for kampanje
+    if (hasCampaign(listing)) {
+      return listing.price_per_unit * (listing.campaign_price / listing.price)
+    }
+    return listing.price_per_unit
+  }
+  // Fallback: regn ut fra size + unit (ml→l og g→kg)
+  if (!listing.size || !listing.unit) return eff
+  const u = listing.unit.toLowerCase()
+  const sizeNorm = u === "ml" || u === "g" ? listing.size / 1000 : listing.size
+  if (!sizeNorm) return eff
+  return eff / sizeNorm
+}
+
+export function cheapestUnitPrice(product) {
+  let min = Infinity
+  for (const l of product.listings) {
+    const ppu = unitPrice(l)
+    if (ppu < min) min = ppu
+  }
+  return min
+}
+
 export function displayName(product) {
   return product.listings?.[0]?.name_raw || product.name_norm || product.name
 }

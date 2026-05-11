@@ -51,7 +51,9 @@ export function removeFromCart(productId) {
   setQuantity(productId, 0)
 }
 
+// Antall unike produkter i kurven (ikke summen av quantity), så det matcher
+// med headeren på handleliste-siden som også teller unike produkter.
 export function cartItemCount(cart) {
   const list = cart ?? readCart()
-  return list.reduce((sum, i) => sum + i.quantity, 0)
+  return list.length
 }

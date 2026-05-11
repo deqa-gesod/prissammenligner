@@ -1,8 +1,9 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import sql from "../../lib/db"
+import { groupByProduct } from "../../lib/queries"
 import { categories } from "../../lib/categories"
-import { hasCampaign, discountPercent } from "../../lib/format"
+import { hasCampaign, discountPercent, cheapestUnitPrice } from "../../lib/format"
 import PriceTable from "../../components/PriceTable"
 import SortSelect from "../../components/SortSelect"
 
@@ -22,50 +23,39 @@ export default async function KategoriPage({ params, searchParams }) {
   const sp = await searchParams
 
   const category = categories.find(c => c.slug === slug)
-  if (!category || !category.enabled) notFound()
+  if (!category) notFound()
 
   const filter = VALID_FILTERS.has(sp?.filter) ? sp.filter : "alle"
   const sort = VALID_SORTS.has(sp?.sort) ? sp.sort : "alfabetisk"
 
-  const allProducts = await sql`
+  const rows = await sql`
     SELECT
-      p.id,
+      p.id AS product_id,
       p.name_norm,
       p.category,
-      json_agg(
-        json_build_object(
-          'store_slug', s.slug,
-          'name_raw', r.name_raw,
-          'price', r.price::float,
-          'price_per_unit', r.price_per_unit::float,
-          'campaign_price', r.campaign_price::float,
-          'campaign_text', r.campaign_text,
-          'url', r.url,
-          'unit', r.unit,
-          'size', r.size::float
-        ) ORDER BY s.slug
-      ) AS listings
-    FROM product p
-    JOIN (
-      SELECT DISTINCT ON (l.product_id, l.store_id)
-        l.product_id, l.store_id, l.name_raw, l.url, l.unit, l.size,
-        ps.price, ps.price_per_unit, ps.campaign_price, ps.campaign_text
-      FROM listing l
-      CROSS JOIN LATERAL (
-        SELECT price, price_per_unit, campaign_price, campaign_text
-        FROM price_snapshot
-        WHERE listing_id = l.id
-        ORDER BY scraped_at DESC
-        LIMIT 1
-      ) ps
-      ORDER BY l.product_id, l.store_id, l.last_seen_at DESC NULLS LAST, l.id
-    ) r ON r.product_id = p.id
-    JOIN store s ON s.id = r.store_id
+      l.name_raw,
+      l.size::float AS size,
+      l.unit,
+      l.url,
+      s.slug AS store_slug,
+      s.name AS store_name,
+      ps.price::float AS price,
+      ps.price_per_unit::float AS price_per_unit,
+      ps.campaign_price::float AS campaign_price,
+      ps.campaign_text
+    FROM listing l
+    JOIN product p ON p.id = l.product_id
+    JOIN store s ON s.id = l.store_id
+    JOIN price_snapshot ps ON ps.listing_id = l.id
     WHERE p.category = ${slug}
-    GROUP BY p.id, p.name_norm, p.category
-    ORDER BY p.name_norm
+      AND ps.scraped_at = (
+        SELECT MAX(scraped_at) FROM price_snapshot WHERE listing_id = l.id
+      )
   `
 
+  const allProducts = groupByProduct(rows).sort((a, b) =>
+    a.name_norm.localeCompare(b.name_norm)
+  )
   const products = sortProducts(filterProducts(allProducts, filter), sort)
 
   return (
@@ -74,7 +64,7 @@ export default async function KategoriPage({ params, searchParams }) {
       <Header category={category} count={products.length} />
       <FilterBar slug={slug} filter={filter} sort={sort} />
       {products.length === 0 ? (
-        <EmptyState filter={filter} />
+        <EmptyState filter={filter} sort={sort} />
       ) : (
         <PriceTable products={products} />
       )}
@@ -84,8 +74,10 @@ export default async function KategoriPage({ params, searchParams }) {
 
 function Breadcrumb({ name }) {
   return (
-    <nav className="text-xs text-mocha mb-4">
-      <Link href="/" className="hover:text-ink">Forside</Link>
+    <nav className="text-[15px] text-mocha mb-6">
+      <Link href="/" className="text-ink hover:text-rose-dusty hover:underline transition-colors">
+        Forside
+      </Link>
       <span className="mx-2 text-rose-dusty">›</span>
       <span className="italic font-serif text-ink">{name}</span>
     </nav>
@@ -145,20 +137,26 @@ function FilterChip({ slug, sort, target, current, children }) {
   )
 }
 
-function EmptyState({ filter }) {
-  const message =
-    filter === "tilbud"
-      ? "Ingen aktive tilbud i denne kategorien akkurat nå."
-      : filter === "alle-butikker"
-        ? "Ingen produkter finnes i alle tre butikker akkurat nå."
-        : "Skraperne har ikke registrert produkter i denne kategorien ennå."
+function EmptyState({ filter, sort }) {
+  let title = "Ingen treff"
+  let message
+  if (sort === "rabatt") {
+    title = "Ingen tilbud akkurat nå"
+    message = "Ingen produkter i denne kategorien har kampanjepris akkurat nå. Skraperne henter nye priser hver 6. time."
+  } else if (filter === "tilbud") {
+    message = "Ingen aktive tilbud i denne kategorien akkurat nå."
+  } else if (filter === "alle-butikker") {
+    message = "Ingen produkter finnes i alle tre butikker akkurat nå."
+  } else {
+    message = "Skraperne har ikke registrert produkter i denne kategorien ennå."
+  }
   return (
     <div
       className="rounded-xl border border-rose-mist bg-blush-50 py-16 px-6 text-center"
       style={{ boxShadow: "0 1px 3px rgba(217,165,165,0.12)" }}
     >
       <div className="text-5xl mb-4 text-rose-dusty" aria-hidden>✿</div>
-      <h2 className="font-serif italic text-2xl text-ink mb-2">Ingen treff</h2>
+      <h2 className="font-serif italic text-2xl text-ink mb-2">{title}</h2>
       <p className="text-mocha text-sm max-w-sm mx-auto">{message}</p>
     </div>
   )
@@ -176,20 +174,15 @@ function filterProducts(products, filter) {
 
 function sortProducts(products, sort) {
   if (sort === "billigst") {
-    return [...products].sort((a, b) => effectiveMin(a) - effectiveMin(b))
+    // Sortér på pris per enhet (kr/l eller kr/kg) — mer rettferdig enn total pris
+    return [...products].sort((a, b) => cheapestUnitPrice(a) - cheapestUnitPrice(b))
   }
   if (sort === "rabatt") {
-    return [...products].sort((a, b) => discountPercent(b) - discountPercent(a))
+    // Vis kun produkter som faktisk har kampanje, sortér på største rabatt
+    return products
+      .filter(p => p.listings.some(hasCampaign))
+      .sort((a, b) => discountPercent(b) - discountPercent(a))
   }
   return products
-}
-
-function effectiveMin(product) {
-  let min = Infinity
-  for (const l of product.listings) {
-    const p = hasCampaign(l) ? l.campaign_price : l.price
-    if (p < min) min = p
-  }
-  return min
 }
 

@@ -23,22 +23,24 @@ function NavBar({ active }) {
   return (
     <>
       <nav className="sticky top-0 z-30 bg-cream/95 backdrop-blur border-b border-rose-mist">
-        <div className="max-w-6xl mx-auto px-6 sm:px-10 py-4 flex items-center gap-6">
+        <div className="max-w-6xl mx-auto px-6 sm:px-10 py-5 sm:py-6 flex items-center gap-6">
           <Link
             href="/"
-            className="font-serif italic text-xl text-ink whitespace-nowrap"
+            className="font-serif italic text-2xl sm:text-3xl text-ink whitespace-nowrap"
             onClick={() => setOpen(false)}
           >
             Prissammenligner
           </Link>
 
-          <div className="hidden lg:flex items-center gap-1 text-sm">
+          <div className="hidden lg:flex items-center gap-1 text-base">
             {categories.map(c => (
-              <CategoryLink
+              <NavLink
                 key={c.slug}
-                category={c}
+                href={`/kategori/${c.slug}`}
                 active={active === c.slug}
-              />
+              >
+                {c.name}
+              </NavLink>
             ))}
             <NavLink href="/tilbud" active={active === "tilbud"} accent>
               ✦ Tilbud
@@ -48,15 +50,15 @@ function NavBar({ active }) {
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
             <Link
               href="/sok"
-              className="hidden sm:flex items-center gap-2 rounded-full border border-sky-soft bg-sky-soft/20 px-4 py-2 text-sm text-mocha hover:border-rose-dusty transition-colors min-w-[180px]"
+              className="hidden sm:flex items-center gap-2 rounded-full border border-sky-soft bg-sky-soft/20 px-5 py-2.5 text-base text-mocha hover:border-rose-dusty transition-colors min-w-[220px]"
             >
-              <span className="text-sky-soft text-base">⌕</span>
+              <span className="text-sky-soft text-lg">⌕</span>
               <span>Søk alle butikker…</span>
             </Link>
 
             <Link
               href="/sok"
-              className="sm:hidden rounded-full border border-sky-soft bg-sky-soft/20 w-10 h-10 flex items-center justify-center hover:border-rose-dusty transition-colors text-sky-soft text-lg"
+              className="sm:hidden rounded-full border border-sky-soft bg-sky-soft/20 w-12 h-12 flex items-center justify-center hover:border-rose-dusty transition-colors text-sky-soft text-xl"
               aria-label="Søk"
             >
               ⌕
@@ -64,13 +66,13 @@ function NavBar({ active }) {
 
             <Link
               href="/handleliste"
-              className="relative rounded-full border border-sky-soft bg-sky-soft/20 w-10 h-10 flex items-center justify-center hover:border-rose-dusty transition-colors"
+              className="relative rounded-full border border-sky-soft bg-sky-soft/20 w-12 h-12 flex items-center justify-center hover:border-rose-dusty transition-colors"
               aria-label={cartCount > 0 ? `Handleliste, ${cartCount} produkter` : "Handleliste"}
             >
-              <span className="text-base">🛒</span>
+              <span className="text-lg">🛒</span>
               {cartCount > 0 && (
                 <span
-                  className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-rose-dusty text-white text-[11px] font-medium flex items-center justify-center tabular-nums"
+                  className="absolute -top-1 -right-1 min-w-[22px] h-[22px] px-1 rounded-full bg-rose-dusty text-white text-xs font-medium flex items-center justify-center tabular-nums"
                   aria-hidden
                 >
                   {cartCount}
@@ -80,7 +82,7 @@ function NavBar({ active }) {
 
             <button
               onClick={() => setOpen(o => !o)}
-              className="lg:hidden rounded-full border border-sky-soft bg-sky-soft/20 w-10 h-10 flex items-center justify-center hover:border-rose-dusty transition-colors text-sky-soft text-lg"
+              className="lg:hidden rounded-full border border-sky-soft bg-sky-soft/20 w-12 h-12 flex items-center justify-center hover:border-rose-dusty transition-colors text-sky-soft text-xl"
               aria-label={open ? "Lukk meny" : "Åpne meny"}
               aria-expanded={open}
             >
@@ -91,33 +93,21 @@ function NavBar({ active }) {
 
         {open && (
           <div className="lg:hidden border-t border-rose-mist bg-cream px-6 sm:px-10 py-4 space-y-1">
-            {categories.map(c =>
-              c.enabled ? (
-                <Link
-                  key={c.slug}
-                  href={`/kategori/${c.slug}`}
-                  onClick={() => setOpen(false)}
-                  className={`block py-2 px-3 rounded-full text-sm transition-colors ${
-                    active === c.slug
-                      ? "bg-rose-mist text-ink"
-                      : "text-mocha hover:bg-blush-50"
-                  }`}
-                >
-                  <span className="mr-2">{c.emoji}</span>
-                  {c.name}
-                </Link>
-              ) : (
-                <span
-                  key={c.slug}
-                  title="Kommer snart"
-                  className="block py-2 px-3 rounded-full text-sm text-mocha/40 cursor-not-allowed"
-                >
-                  <span className="mr-2">{c.emoji}</span>
-                  {c.name}
-                  <span className="ml-2 text-xs italic font-serif">snart</span>
-                </span>
-              )
-            )}
+            {categories.map(c => (
+              <Link
+                key={c.slug}
+                href={`/kategori/${c.slug}`}
+                onClick={() => setOpen(false)}
+                className={`block py-2 px-3 rounded-full text-sm transition-colors ${
+                  active === c.slug
+                    ? "bg-rose-mist text-ink"
+                    : "text-mocha hover:bg-blush-50"
+                }`}
+              >
+                <span className="mr-2">{c.emoji}</span>
+                {c.name}
+              </Link>
+            ))}
             <Link
               href="/tilbud"
               onClick={() => setOpen(false)}
@@ -144,26 +134,8 @@ function NavBar({ active }) {
   )
 }
 
-function CategoryLink({ category, active }) {
-  if (!category.enabled) {
-    return (
-      <span
-        title="Kommer snart"
-        className="px-3 py-2 rounded-full whitespace-nowrap text-mocha/40 cursor-not-allowed"
-      >
-        {category.name}
-      </span>
-    )
-  }
-  return (
-    <NavLink href={`/kategori/${category.slug}`} active={active}>
-      {category.name}
-    </NavLink>
-  )
-}
-
 function NavLink({ href, active, accent, children }) {
-  const base = "relative px-3 py-2 rounded-full whitespace-nowrap transition-colors"
+  const base = "relative px-4 py-2 rounded-full whitespace-nowrap transition-colors"
   const state = active
     ? "text-ink"
     : accent
@@ -173,7 +145,7 @@ function NavLink({ href, active, accent, children }) {
     <Link href={href} className={`${base} ${state}`}>
       {children}
       {active && (
-        <span className="absolute left-3 right-3 -bottom-0.5 h-px bg-rose-dusty" />
+        <span className="absolute left-4 right-4 -bottom-0.5 h-px bg-rose-dusty" />
       )}
     </Link>
   )

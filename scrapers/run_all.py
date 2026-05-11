@@ -6,16 +6,18 @@ import spar
 
 
 def main() -> None:
+    failed = []
     for modul in (oda, meny, spar):
         navn = modul.__name__
         print(f"\n=== Kjører {navn} ===")
         try:
             modul.main()
-        except NotImplementedError as e:
-            print(f"Hopper over {navn}: {e}")
         except Exception as e:
             print(f"FEIL i {navn}: {e}")
-            raise
+            failed.append(navn)
+    if failed:
+        # La andre skrapere kjøre, men marker hele jobben som feilet
+        raise SystemExit(f"Skraping feilet for: {', '.join(failed)}")
 
 
 if __name__ == "__main__":

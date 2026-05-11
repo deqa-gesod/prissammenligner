@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Suspense, useEffect, useMemo, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { stores } from "../../lib/stores"
 import { categories } from "../../lib/categories"
@@ -14,22 +14,12 @@ import {
 import { readCart } from "../../lib/cart"
 import { getCartProducts } from "../../lib/cart-server"
 
+// useSearchParams krever Suspense rundt seg i Next.js, derfor wrapper jeg her.
 export default function KjopPage() {
   return (
-    <Suspense fallback={<KjopLoading />}>
+    <Suspense>
       <KjopContent />
     </Suspense>
-  )
-}
-
-function KjopLoading() {
-  return (
-    <div className="max-w-4xl mx-auto px-6 sm:px-10 py-10 sm:py-14">
-      <div className="rounded-xl border border-rose-mist bg-blush-50 p-10 animate-pulse">
-        <div className="h-8 w-2/3 mx-auto bg-rose-mist/60 rounded mb-4" />
-        <div className="h-4 w-1/2 mx-auto bg-rose-mist/60 rounded" />
-      </div>
-    </div>
   )
 }
 
@@ -42,46 +32,31 @@ function KjopContent() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    let ignore = false
     async function load() {
       const items = readCart()
       if (items.length === 0) {
-        if (!ignore) {
-          setCart(items)
-          setProducts([])
-          setLoading(false)
-        }
+        setCart(items)
+        setProducts([])
+        setLoading(false)
         return
       }
       const rows = await getCartProducts(items.map(i => i.productId))
-      if (ignore) return
       setCart(items)
       setProducts(rows)
       setLoading(false)
     }
     load()
-    return () => {
-      ignore = true
-    }
   }, [])
 
-  const validCart = useMemo(
-    () => (cart ?? []).filter(item => products.some(p => p.id === item.productId)),
-    [cart, products]
+  const validCart = (cart ?? []).filter(item =>
+    products.some(p => p.id === item.productId)
   )
+  const totals = computeTotals(validCart, products)
+  const cheapestSlug = findCheapestStore(totals)
 
-  const totals = useMemo(() => computeTotals(validCart, products), [validCart, products])
-
-  const cheapestSlug = useMemo(() => {
-    const candidates = stores.filter(s => totals.missing[s.slug] === 0)
-    const pool = candidates.length > 0 ? candidates : stores
-    return pool.reduce(
-      (min, s) => (totals.totals[s.slug] < totals.totals[min] ? s.slug : min),
-      pool[0].slug
-    )
-  }, [totals])
-
-  const isFullyMissing = slug => totals.missing[slug] === validCart.length
+  function isFullyMissing(slug) {
+    return totals.missing[slug] === validCart.length
+  }
   const paramValid =
     stores.some(s => s.slug === storeParam) && !isFullyMissing(storeParam)
   const selectedSlug = paramValid ? storeParam : cheapestSlug
@@ -116,7 +91,7 @@ function KjopContent() {
             Handlelista er tom. Legg til produkter først.
           </p>
           <Link
-            href="/kategori/meieri"
+            href="/kategori/melk"
             className="inline-block rounded-full bg-rose-dusty text-white px-6 py-3 text-sm font-medium hover:bg-rose-dusty/90 transition-colors"
           >
             Utforsk produkter
@@ -149,8 +124,13 @@ function KjopContent() {
 
 function Breadcrumb() {
   return (
-    <nav className="text-xs text-mocha mb-6">
-      <Link href="/handleliste" className="hover:text-ink">Handleliste</Link>
+    <nav className="text-[15px] text-mocha mb-6">
+      <Link
+        href="/handleliste"
+        className="text-ink hover:text-rose-dusty hover:underline transition-colors"
+      >
+        Handleliste
+      </Link>
       <span className="mx-2 text-rose-dusty">›</span>
       <span className="italic font-serif text-ink">Kjøpsoversikt</span>
     </nav>
@@ -367,4 +347,14 @@ function computeTotals(cart, products) {
     }
   }
   return { totals, missing }
+}
+
+function findCheapestStore(totals) {
+  const withAll = stores.filter(s => totals.missing[s.slug] === 0)
+  const pool = withAll.length > 0 ? withAll : stores
+  let best = pool[0].slug
+  for (const s of pool) {
+    if (totals.totals[s.slug] < totals.totals[best]) best = s.slug
+  }
+  return best
 }

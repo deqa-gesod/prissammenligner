@@ -57,11 +57,8 @@ def fetch_products() -> list[dict]:
 
 
 def parse_product(attrs: dict) -> dict:
-    # Oda gir oss tre navnevarianter:
-    #   name:      "Tine Lettmelk"               (kort)
-    #   fullName:  "Tine Lettmelk 0,5% fett"     (med fett-prosent)
-    #   nameExtra: "0,5% fett, 1,75 l"           (fett + størrelse)
-    # Beste display-navn er name + nameExtra, slik at størrelse er med og ingenting er duplisert.
+    # Oda gir tre navnevariater: name (kort), fullName (med fett%), nameExtra (fett + størrelse).
+    # Display blir name + nameExtra → ingenting duplisert, størrelse med.
     short_name = attrs.get("name") or attrs["fullName"]
     name_extra = attrs.get("nameExtra") or ""
     display_name = f"{short_name}, {name_extra}".strip(", ").strip()

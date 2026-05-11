@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { stores } from "../lib/stores"
 import {
   formatKr,
@@ -24,54 +24,39 @@ export default function HandlelistePage() {
   const [loading, setLoading] = useState(true)
   const [userSelectedSlug, setUserSelectedSlug] = useState(null)
 
-  useEffect(() => {
-    let ignore = false
-
-    async function load() {
-      const items = readCart()
-      const ids = items.map(i => i.productId)
-      if (ids.length === 0) {
-        if (!ignore) {
-          setCart(items)
-          setProducts([])
-          setLoading(false)
-        }
-        return
-      }
-      const rows = await getCartProducts(ids)
-      if (ignore) return
+  async function load() {
+    const items = readCart()
+    const ids = items.map(i => i.productId)
+    if (ids.length === 0) {
       setCart(items)
-      setProducts(rows)
+      setProducts([])
       setLoading(false)
+      return
     }
+    const rows = await getCartProducts(ids)
+    setCart(items)
+    setProducts(rows)
+    setLoading(false)
+  }
 
+  useEffect(() => {
     load()
-    const onChange = () => load()
+    function onChange() {
+      load()
+    }
     window.addEventListener("cart-changed", onChange)
     window.addEventListener("storage", onChange)
     return () => {
-      ignore = true
       window.removeEventListener("cart-changed", onChange)
       window.removeEventListener("storage", onChange)
     }
   }, [])
 
-  const validCart = useMemo(() => {
-    if (!cart) return []
-    return cart.filter(item => products.some(p => p.id === item.productId))
-  }, [cart, products])
-
-  const totals = useMemo(() => computeTotals(validCart, products), [validCart, products])
-
-  const cheapestSlug = useMemo(() => {
-    const candidates = stores.filter(s => totals.missing[s.slug] === 0)
-    const pool = candidates.length > 0 ? candidates : stores
-    return pool.reduce(
-      (min, s) => (totals.totals[s.slug] < totals.totals[min] ? s.slug : min),
-      pool[0].slug
-    )
-  }, [totals])
-
+  const validCart = cart
+    ? cart.filter(item => products.some(p => p.id === item.productId))
+    : []
+  const totals = computeTotals(validCart, products)
+  const cheapestSlug = findCheapestStore(totals)
   const selectedSlug = userSelectedSlug ?? cheapestSlug
 
   if (loading) {
@@ -113,7 +98,7 @@ export default function HandlelistePage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
-              href="/kategori/meieri"
+              href="/kategori/melk"
               className="inline-block rounded-full bg-rose-dusty text-white px-6 py-3 text-sm font-medium hover:bg-rose-dusty/90 transition-colors"
             >
               Utforsk produkter
@@ -446,5 +431,16 @@ function computeTotals(cart, products) {
     }
   }
   return { totals, missing }
+}
+
+function findCheapestStore(totals) {
+  // Foretrekk butikker som har alle produktene; ellers velg billigst av alle
+  const withAll = stores.filter(s => totals.missing[s.slug] === 0)
+  const pool = withAll.length > 0 ? withAll : stores
+  let best = pool[0].slug
+  for (const s of pool) {
+    if (totals.totals[s.slug] < totals.totals[best]) best = s.slug
+  }
+  return best
 }
 

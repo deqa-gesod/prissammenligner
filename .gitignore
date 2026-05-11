@@ -54,3 +54,10 @@ __pycache__/
 /kategori-*.png
 /kjop-*.png
 /produkt-*.png
+/*.png
+prissammenligner-screenshots/
+
+# personlige / portefølje-kontekstfiler (ikke offentlig)
+/omdeqa.md
+/PORTFOLIO-CONTEXT.md
+/PORTFOLIO-PROMPT-PRISSAMMENLIGNER.md

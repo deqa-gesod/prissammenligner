@@ -4,7 +4,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation"
 
 const OPTIONS = [
   { value: "alfabetisk", label: "Alfabetisk" },
-  { value: "billigst", label: "Billigste pris" },
+  { value: "billigst", label: "Billigst per enhet" },
   { value: "rabatt", label: "Størst rabatt" },
 ]
 

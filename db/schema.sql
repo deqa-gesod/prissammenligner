@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS product (
 
 CREATE INDEX IF NOT EXISTS idx_product_name_norm ON product(name_norm);
 CREATE INDEX IF NOT EXISTS idx_product_gtin      ON product(gtin) WHERE gtin IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_product_category  ON product(category);
 
 CREATE TABLE IF NOT EXISTS listing (
   id            SERIAL PRIMARY KEY,

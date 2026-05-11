@@ -1,5 +1,6 @@
 import Link from "next/link"
 import sql from "../lib/db"
+import { groupByProduct } from "../lib/queries"
 import { categories } from "../lib/categories"
 import { stores } from "../lib/stores"
 import {
@@ -19,50 +20,37 @@ export const metadata = {
   title: "Tilbud · Prissammenligner",
 }
 
-const VALID_CATEGORY_SLUGS = new Set(categories.filter(c => c.enabled).map(c => c.slug))
+const VALID_CATEGORY_SLUGS = new Set(categories.map(c => c.slug))
 
 export default async function TilbudPage({ searchParams }) {
   const sp = await searchParams
   const categorySlug = VALID_CATEGORY_SLUGS.has(sp?.kategori) ? sp.kategori : null
 
-  const allProducts = await sql`
+  const rows = await sql`
     SELECT
-      p.id,
+      p.id AS product_id,
       p.name_norm,
       p.category,
-      json_agg(
-        json_build_object(
-          'store_slug', s.slug,
-          'name_raw', r.name_raw,
-          'price', r.price::float,
-          'price_per_unit', r.price_per_unit::float,
-          'campaign_price', r.campaign_price::float,
-          'campaign_text', r.campaign_text,
-          'url', r.url,
-          'unit', r.unit,
-          'size', r.size::float
-        ) ORDER BY s.slug
-      ) AS listings
-    FROM product p
-    JOIN (
-      SELECT DISTINCT ON (l.product_id, l.store_id)
-        l.product_id, l.store_id, l.name_raw, l.url, l.unit, l.size,
-        ps.price, ps.price_per_unit, ps.campaign_price, ps.campaign_text
-      FROM listing l
-      CROSS JOIN LATERAL (
-        SELECT price, price_per_unit, campaign_price, campaign_text
-        FROM price_snapshot
-        WHERE listing_id = l.id
-        ORDER BY scraped_at DESC
-        LIMIT 1
-      ) ps
-      ORDER BY l.product_id, l.store_id, l.last_seen_at DESC NULLS LAST, l.id
-    ) r ON r.product_id = p.id
-    JOIN store s ON s.id = r.store_id
-    GROUP BY p.id, p.name_norm, p.category
+      l.name_raw,
+      l.size::float AS size,
+      l.unit,
+      l.url,
+      s.slug AS store_slug,
+      s.name AS store_name,
+      ps.price::float AS price,
+      ps.price_per_unit::float AS price_per_unit,
+      ps.campaign_price::float AS campaign_price,
+      ps.campaign_text
+    FROM listing l
+    JOIN product p ON p.id = l.product_id
+    JOIN store s ON s.id = l.store_id
+    JOIN price_snapshot ps ON ps.listing_id = l.id
+    WHERE ps.scraped_at = (
+      SELECT MAX(scraped_at) FROM price_snapshot WHERE listing_id = l.id
+    )
   `
 
-  const deals = allProducts
+  const deals = groupByProduct(rows)
     .filter(p => p.listings.some(hasCampaign))
     .filter(p => !categorySlug || p.category === categorySlug)
     .sort((a, b) => discountPercent(b) - discountPercent(a))
@@ -103,27 +91,16 @@ function CategoryFilter({ current }) {
   return (
     <div className="mb-8 flex flex-wrap items-center gap-2 text-sm overflow-x-auto">
       <Chip href="/tilbud" active={!current}>Alle kategorier</Chip>
-      {categories.map(c =>
-        c.enabled ? (
-          <Chip
-            key={c.slug}
-            href={`/tilbud?kategori=${c.slug}`}
-            active={current === c.slug}
-          >
-            <span className="mr-1">{c.emoji}</span>
-            {c.name}
-          </Chip>
-        ) : (
-          <span
-            key={c.slug}
-            title="Kommer snart"
-            className="rounded-full px-4 py-2 border bg-blush-50/50 text-mocha/40 border-rose-mist whitespace-nowrap cursor-not-allowed"
-          >
-            <span className="mr-1 grayscale">{c.emoji}</span>
-            {c.name}
-          </span>
-        )
-      )}
+      {categories.map(c => (
+        <Chip
+          key={c.slug}
+          href={`/tilbud?kategori=${c.slug}`}
+          active={current === c.slug}
+        >
+          <span className="mr-1">{c.emoji}</span>
+          {c.name}
+        </Chip>
+      ))}
     </div>
   )
 }
