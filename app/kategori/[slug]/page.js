@@ -7,7 +7,7 @@ import { hasCampaign, discountPercent, cheapestUnitPrice } from "../../lib/forma
 import PriceTable from "../../components/PriceTable"
 import SortSelect from "../../components/SortSelect"
 
-export const revalidate = 0
+export const revalidate = 60
 
 export async function generateMetadata({ params }) {
   const { slug } = await params

@@ -2,7 +2,7 @@ import Link from "next/link"
 import sql from "./lib/db"
 import { categories } from "./lib/categories"
 
-export const revalidate = 0
+export const revalidate = 60
 
 const MEIERI_KATEGORIER = ["melk", "syrnet", "sjokolademelk", "proteindrikker"]
 

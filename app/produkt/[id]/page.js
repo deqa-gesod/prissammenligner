@@ -15,7 +15,7 @@ import {
 } from "../../lib/format"
 import AddToCartButton from "../../components/AddToCartButton"
 
-export const revalidate = 0
+export const revalidate = 60
 
 export async function generateMetadata({ params }) {
   const { id } = await params

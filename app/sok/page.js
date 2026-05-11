@@ -13,7 +13,7 @@ import {
   effectivePrice,
 } from "../lib/format"
 
-export const revalidate = 0
+export const revalidate = 60
 
 export async function generateMetadata({ searchParams }) {
   const sp = await searchParams
