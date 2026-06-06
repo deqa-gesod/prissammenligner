@@ -42,7 +42,7 @@ That last table is what makes the 30-day history and the "cheapest right now" qu
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/<brukernavn>/prissammenligner.git
+git clone https://github.com/<username>/prissammenligner.git
 cd prissammenligner
 
 # 2. Set up the database
