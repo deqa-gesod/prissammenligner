@@ -4,7 +4,7 @@ A price tracker for Norwegian dairy products. It collects prices from three groc
 
 The idea came from a small everyday annoyance: I can never remember where milk and yoghurt are actually cheapest. So I built something that keeps track for me.
 
-**Live demo:** not deployed yet. The local setup below runs the full app.
+**Live demo:** [prissammenligner.vercel.app](https://prissammenligner.vercel.app/)
 
 ## What it does
 
@@ -18,7 +18,7 @@ The idea came from a small everyday annoyance: I can never remember where milk a
 
 This is the part I spent the most time on, and it is where the project earns its keep.
 
-**Collecting.** One Python scraper per store (`oda.py`, `meny.py`, `spar.py`) pulls product data over `httpx`. `run_all.py` runs all three in sequence. If one store fails, the others still run, but the whole job is marked as failed so the problem is visible.
+**Collecting.** One Python scraper per store (`oda.py`, `meny.py`, `spar.py`) pulls product data over `httpx`. `run_all.py` runs all three in sequence. If one store fails the others still run and their data is saved; the job is only marked as failed when all three fail, so a single blocked store (Oda blocks GitHub Actions' datacenter IPs, for instance) doesn't bury real problems.
 
 **Matching across stores.** The hard problem is that the same carton of milk is named differently everywhere. "Tine Lettmelk 1L" in one store, "Lettmelk 0,5% 1 liter" in another. `normalize.py` turns raw names into a comparable key: it lowercases, converts units (ml to l, g to kg), strips percentage signs and generic brand names, collapses duplicate words, and so on. Two listings with the same normalized name are treated as the same product. It also classifies each item into a narrow category (plain milk, cultured milk, chocolate milk, protein drinks), where the rule order matters: a protein shake that happens to be chocolate-flavoured should land in protein drinks, not chocolate milk.
 
@@ -36,7 +36,7 @@ That last table is what makes the 30-day history and the "cheapest right now" qu
 - **Supabase Postgres**, queried with raw SQL through the `postgres` package, no ORM
 - **Python + httpx** for the scrapers
 - **GitHub Actions** to run the scrapers on a cron schedule
-- **Vercel** for hosting (planned)
+- **Vercel** for hosting
 
 ## Running it locally
 
@@ -94,6 +94,5 @@ scrapers/
 - Only dairy categories so far: milk, cultured milk, chocolate milk and protein drinks
 - The scrapers are fragile. If a store changes its API or HTML, they break, which is the usual cost of scraping sites that do not offer a stable public feed
 - No test suite yet. The name-normalization logic is the obvious first thing to cover, since it has clear inputs and expected outputs
-- Not deployed publicly yet
 
 If I kept going, the priorities would be tests around `normalize.py`, broader categories, and making each scraper fail more gracefully when a store's layout shifts.
